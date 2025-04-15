@@ -2,6 +2,17 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 import os
+import time
+
+# Check CUDA availability and print detailed info
+print("CUDA available:", torch.cuda.is_available())
+if torch.cuda.is_available():
+    print("Number of GPUs:", torch.cuda.device_count())
+    print("Current GPU:", torch.cuda.current_device())
+    print("GPU Name:", torch.cuda.get_device_name(0))
+    print("CUDA Version:", torch.version.cuda)
+else:
+    print("CUDA is not available. Please check your PyTorch installation and GPU drivers.")
 
 # hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel?
@@ -10,6 +21,12 @@ max_iters = 5000
 eval_interval = 500
 learning_rate = 3e-4
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f"Using device: {device}")
+if device == 'cuda':
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(f"Available GPU memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.2f} GB")
+else:
+    print("No GPU available, using CPU")
 eval_iters = 200
 n_embd = 384
 n_head = 6
@@ -211,11 +228,14 @@ else:
     # create a PyTorch optimizer
     optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
+    start_time = time.time()
+
     for iter in range(max_iters):
         # every once in a while evaluate the loss on train and val sets
         if iter % eval_interval == 0 or iter == max_iters - 1:
             losses = estimate_loss()
-            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+            elapsed_time = time.time() - start_time
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}, elapsed time: {elapsed_time:.2f} seconds")
 
         # sample a batch of data
         xb, yb = get_batch('train')
@@ -226,6 +246,8 @@ else:
         loss.backward()
         optimizer.step()
     
+    total_time = time.time() - start_time
+    print(f"\nTraining completed in {total_time:.2f} seconds ({total_time/60:.2f} minutes)")
     # Save the model after training
     torch.save(m.state_dict(), 'gpt_model.pth')
     print("Model saved to gpt_model.pth")
