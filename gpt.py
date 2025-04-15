@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import os
 
 # hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel?
@@ -200,26 +201,35 @@ m = model.to(device)
 # print the number of parameters in the model
 print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
 
-# create a PyTorch optimizer
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+# Check if model file exists
+if os.path.exists('gpt_model.pth'):
+    print("Loading existing model...")
+    m.load_state_dict(torch.load('gpt_model.pth'))
+    m.eval()  # Set to evaluation mode
+else:
+    print("No existing model found. Starting training...")
+    # create a PyTorch optimizer
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
-for iter in range(max_iters):
+    for iter in range(max_iters):
+        # every once in a while evaluate the loss on train and val sets
+        if iter % eval_interval == 0 or iter == max_iters - 1:
+            losses = estimate_loss()
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
-    # every once in a while evaluate the loss on train and val sets
-    if iter % eval_interval == 0 or iter == max_iters - 1:
-        losses = estimate_loss()
-        print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        # sample a batch of data
+        xb, yb = get_batch('train')
 
-    # sample a batch of data
-    xb, yb = get_batch('train')
-
-    # evaluate the loss
-    logits, loss = model(xb, yb)
-    optimizer.zero_grad(set_to_none=True)
-    loss.backward()
-    optimizer.step()
+        # evaluate the loss
+        logits, loss = model(xb, yb)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+    
+    # Save the model after training
+    torch.save(m.state_dict(), 'gpt_model.pth')
+    print("Model saved to gpt_model.pth")
 
 # generate from the model
 context = torch.zeros((1, 1), dtype=torch.long, device=device)
 print(decode(m.generate(context, max_new_tokens=500)[0].tolist()))
-#open('more.txt', 'w').write(decode(m.generate(context, max_new_tokens=10000)[0].tolist()))
